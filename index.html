@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traffic Finder - Find Roads Without Traffic</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.95;
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+            padding: 20px;
+            min-height: 600px;
+        }
+
+        #map {
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            z-index: 1;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+        }
+
+        .panel {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .panel h2 {
+            color: #667eea;
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel h2::before {
+            display: inline-block;
+            width: 4px;
+            height: 24px;
+            background: #667eea;
+            border-radius: 2px;
+        }
+
+        .search-section {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        input[type="text"] {
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .traffic-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .traffic-indicator.free {
+            background: #d4edda;
+            color: #155724;
+            border-left: 4px solid #28a745;
+        }
+
+        .traffic-indicator.light {
+            background: #cfe2ff;
+            color: #084298;
+            border-left: 4px solid #0d6efd;
+        }
+
+        .traffic-indicator.moderate {
+            background: #fff3cd;
+            color: #664d03;
+            border-left: 4px solid #ffc107;
+        }
+
+        .traffic-indicator.heavy {
+            background: #f8d7da;
+            color: #842029;
+            border-left: 4px solid #dc3545;
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .free .status-dot {
+            background: #28a745;
+        }
+
+        .light .status-dot {
+            background: #0d6efd;
+        }
+
+        .moderate .status-dot {
+            background: #ffc107;
+        }
+
+        .heavy .status-dot {
+            background: #dc3545;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .road-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .road-item {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            background: white;
+            border-left: 4px solid #667eea;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .road-item:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transform: translateX(5px);
+        }
+
+        .road-item-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .road-item-traffic {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .legend {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .stat-box {
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            border: 2px solid #e0e0e0;
+        }
+
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .info-message {
+            padding: 12px;
+            background: #e7f3ff;
+            border-left: 4px solid #0d6efd;
+            border-radius: 4px;
+            color: #084298;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                max-height: 300px;
+            }
+
+            .header h1 {
+                font-size: 1.8em;
+            }
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚗 Traffic Finder</h1>
+            <p>Find roads without traffic and optimize your route</p>
+        </div>
+
+        <div class="content">
+            <div id="map"></div>
+
+            <div class="sidebar">
+                <div class="panel">
+                    <h2>Search Route</h2>
+                    <div class="search-section">
+                        <input type="text" id="startPoint" placeholder="Start location" />
+                        <input type="text" id="endPoint" placeholder="Destination" />
+                        <button onclick="findClearRoads()">Find Clear Roads</button>
+                        <div class="info-message">
+                            ℹ️ Enter start and end locations to find the least congested route
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h2>Real-Time Status</h2>
+                    <div id="trafficStatus"></div>
+                </div>
+
+                <div class="panel">
+                    <h2>Traffic Conditions</h2>
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #28a745;"></div>
+                            <span>Free (0-20 vehicles)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #0d6efd;"></div>
+                            <span>Light (20-50 vehicles)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #ffc107;"></div>
+                            <span>Moderate (50-100 vehicles)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #dc3545;"></div>
+                            <span>Heavy (100+ vehicles)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h2>Statistics</h2>
+                    <div class="stats" id="statistics">
+                        <div class="stat-box">
+                            <div class="stat-value">-</div>
+                            <div class="stat-label">Avg Speed</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value">-</div>
+                            <div class="stat-label">Clear Roads</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
+    <script>
+        // Initialize map
+        const map = L.map('map').setView([40.7128, -74.0060], 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Sample road data with traffic information
+        const roadsData = [
+            { id: 1, name: 'Main Street', coords: [[40.7128, -74.0060], [40.7200, -74.0050]], traffic: 'free', vehicles: 15, avgSpeed: 45 },
+            { id: 2, name: 'Broadway', coords: [[40.7150, -74.0050], [40.7250, -74.0040]], traffic: 'heavy', vehicles: 150, avgSpeed: 8 },
+            { id: 3, name: 'Park Avenue', coords: [[40.7128, -74.0100], [40.7280, -74.0080]], traffic: 'light', vehicles: 35, avgSpeed: 35 },
+            { id: 4, name: 'Madison Avenue', coords: [[40.7100, -73.9950], [40.7300, -73.9920]], traffic: 'moderate', vehicles: 75, avgSpeed: 22 },
+            { id: 5, name: 'Fifth Avenue', coords: [[40.7000, -73.9800], [40.7300, -73.9800]], traffic: 'free', vehicles: 10, avgSpeed: 50 },
+            { id: 6, name: 'East River Drive', coords: [[40.7200, -73.9750], [40.7500, -73.9700]], traffic: 'light', vehicles: 40, avgSpeed: 38 },
+            { id: 7, name: 'West Side Highway', coords: [[40.7100, -74.0150], [40.7400, -74.0120]], traffic: 'moderate', vehicles: 85, avgSpeed: 25 },
+            { id: 8, name: 'Central Park South', coords: [[40.7760, -73.9700], [40.7760, -73.9400]], traffic: 'free', vehicles: 20, avgSpeed: 42 }
+        ];
+
+        // Draw roads on map
+        function drawRoads() {
+            roadsData.forEach(road => {
+                const color = getTrafficColor(road.traffic);
+                L.polyline(road.coords, {
+                    color: color,
+                    weight: 5,
+                    opacity: 0.7,
+                    dashArray: road.traffic === 'heavy' ? '5, 5' : ''
+                }).bindPopup(`<b>${road.name}</b><br>Traffic: ${road.traffic}<br>Vehicles: ${road.vehicles}`).addTo(map);
+            });
+        }
+
+        function getTrafficColor(traffic) {
+            const colors = {
+                'free': '#28a745',
+                'light': '#0d6efd',
+                'moderate': '#ffc107',
+                'heavy': '#dc3545'
+            };
+            return colors[traffic] || '#666';
+        }
+
+        function getTrafficLabel(traffic) {
+            const labels = {
+                'free': 'Free',
+                'light': 'Light Traffic',
+                'moderate': 'Moderate Traffic',
+                'heavy': 'Heavy Traffic'
+            };
+            return labels[traffic] || 'Unknown';
+        }
+
+        // Update traffic status
+        function updateTrafficStatus() {
+            const statusHTML = roadsData.map(road => `
+                <div class="traffic-indicator ${road.traffic}">
+                    <span class="status-dot"></span>
+                    <div>
+                        <div><strong>${road.name}</strong></div>
+                        <div style="font-size: 0.8em;">${getTrafficLabel(road.traffic)} - ${road.vehicles} vehicles</div>
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('trafficStatus').innerHTML = statusHTML;
+        }
+
+        // Find clear roads
+        function findClearRoads() {
+            const start = document.getElementById('startPoint').value;
+            const end = document.getElementById('endPoint').value;
+
+            if (!start || !end) {
+                alert('Please enter both start and end locations');
+                return;
+            }
+
+            // Filter roads with no or minimal traffic
+            const clearRoads = roadsData.filter(road => 
+                road.traffic === 'free' || road.traffic === 'light'
+            ).sort((a, b) => a.vehicles - b.vehicles);
+
+            if (clearRoads.length > 0) {
+                displayClearRoads(clearRoads, start, end);
+            } else {
+                alert('No clear roads found. All routes have some traffic.');
+            }
+
+            updateStatistics(clearRoads);
+        }
+
+        // Display clear roads
+        function displayClearRoads(roads, start, end) {
+            const roadListHTML = roads.map(road => `
+                <div class="road-item" onclick="highlightRoad(${road.id})">
+                    <div class="road-item-name">✓ ${road.name}</div>
+                    <div class="road-item-traffic">
+                        🚗 ${road.vehicles} vehicles | 🏃 ${road.avgSpeed} km/h
+                    </div>
+                </div>
+            `).join('');
+
+            const contentHTML = `
+                <div style="margin-bottom: 15px; padding: 12px; background: #d4edda; border-radius: 8px; color: #155724;">
+                    <strong>✓ Found ${roads.length} clear route(s)</strong><br>
+                    <small>From: ${start} → To: ${end}</small>
+                </div>
+                <div class="road-list">${roadListHTML}</div>
+            `;
+
+            document.getElementById('trafficStatus').innerHTML = contentHTML;
+        }
+
+        // Highlight road on map
+        function highlightRoad(roadId) {
+            const road = roadsData.find(r => r.id === roadId);
+            if (road) {
+                const bounds = L.latLngBounds(road.coords);
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+        }
+
+        // Update statistics
+        function updateStatistics(roads) {
+            if (roads.length === 0) {
+                document.getElementById('statistics').innerHTML = `
+                    <div class="stat-box">
+                        <div class="stat-value">-</div>
+                        <div class="stat-label">Avg Speed</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">0</div>
+                        <div class="stat-label">Clear Roads</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const avgSpeed = Math.round(roads.reduce((sum, r) => sum + r.avgSpeed, 0) / roads.length);
+            
+            document.getElementById('statistics').innerHTML = `
+                <div class="stat-box">
+                    <div class="stat-value">${avgSpeed}</div>
+                    <div class="stat-label">Avg Speed (km/h)</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value">${roads.length}</div>
+                    <div class="stat-label">Clear Roads</div>
+                </div>
+            `;
+        }
+
+        // Simulate real-time traffic updates
+        function simulateTrafficUpdate() {
+            roadsData.forEach(road => {
+                const change = Math.floor((Math.random() - 0.5) * 20);
+                road.vehicles = Math.max(0, road.vehicles + change);
+                
+                if (road.vehicles < 20) road.traffic = 'free';
+                else if (road.vehicles < 50) road.traffic = 'light';
+                else if (road.vehicles < 100) road.traffic = 'moderate';
+                else road.traffic = 'heavy';
+
+                road.avgSpeed = Math.max(5, 50 - (road.vehicles / 3));
+            });
+            updateTrafficStatus();
+        }
+
+        // Initialize
+        drawRoads();
+        updateTrafficStatus();
+
+        // Update traffic every 10 seconds
+        setInterval(simulateTrafficUpdate, 10000);
+
+        // Allow Enter key to search
+        document.getElementById('endPoint').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') findClearRoads();
+        });
+    </script>
+</body>
+</html>
